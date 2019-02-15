@@ -27,6 +27,7 @@
 #include "event2/event-config.h"
 #include "evconfig-private.h"
 
+#include <dirent.h>
 #include <sys/types.h>
 
 #ifdef _WIN32
@@ -384,6 +385,29 @@ evconnlistener_set_error_cb(struct evconnlistener *lev,
 	UNLOCK(lev);
 }
 
+static
+int get_num_fds(void);
+
+static
+int get_num_fds()
+{
+     int fd_count;
+     char buf[64];
+     struct dirent *dp;
+		 DIR *dir = NULL;
+
+     snprintf(buf, 64, "/proc/%i/fd/", getpid());
+
+     fd_count = 0;
+     
+		 dir = opendir(buf);
+     while ((dp = readdir(dir)) != NULL) {
+          fd_count++;
+     }
+     closedir(dir);
+     return fd_count;
+}
+
 static void
 listener_read_cb(evutil_socket_t fd, short what, void *p)
 {
@@ -445,6 +469,9 @@ listener_read_cb(evutil_socket_t fd, short what, void *p)
 		listener_decref_and_unlock(lev);
 	} else {
 		event_sock_warn(fd, "Error from accept() call");
+		event_warn("Number of open fd(s): %d", get_num_fds());
+		event_errx(1, "%s: %p(fd "EV_SOCK_FMT") Error from accept() call", __func__,
+		    lev, EV_SOCK_ARG(fd));
 		UNLOCK(lev);
 	}
 }
